@@ -9,21 +9,12 @@ export class MeComFrame {
   // 5 Frame    |  CRC UINT16 | 32 Bits
   // 6 EOF      |  ASCII char | 8 Bits
 
-  private crc: number;
   private EOF = "\r";
 
-  constructor(
-    public control = "#",
-    public address: number = 0,
-    public sequence: number = 0,
-    public payload: string
-  ) {
-    this.crc = this.calculateCRC(this.partialFrame);
-  }
+  constructor(public control = "#", public address: number = 0, public sequence: number = 0, public payload: string) {}
 
-  private calculateCRC(data: string): number {
-    console.log(`doing ${data}`);
-    return crc16ccitt(Buffer.from(data));
+  public get crc(): number {
+    return crc16ccitt(Buffer.from(this.partialFrame));
   }
 
   /** Frame without CRC and EOF */
