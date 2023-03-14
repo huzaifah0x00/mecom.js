@@ -2,7 +2,7 @@
   "name": "mecom",
   "version": "0.0.0",
   "description": "MeCom API for node.js",
-  "main": "index.ts",
+  "main": "src/index.ts",
   "scripts": {
     "test": "jest"
   },
