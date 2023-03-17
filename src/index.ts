@@ -60,7 +60,7 @@ export class MeComFrame {
     const parsedFrame = new MeComFrame(control, address, sequence, payload);
 
     if (parsedFrame.crc !== crc) {
-      throw new Error("Invalid CRC");
+      throw new Error(`CRC mismatch: ${parsedFrame.crc} !== ${crc}`);
     }
 
     return parsedFrame;
@@ -71,22 +71,34 @@ export class MeComQuery extends MeComFrame {
   control = "#";
 }
 
-export const sendFrame = (frame: MeComFrame, port: SerialPort): Promise<MeComFrame> => {
-  return new Promise((resolve, reject) => {
-    const dataHandler = (buffer: Buffer) => {
-      const data = buffer.toString();
+export class MeComResponse extends MeComFrame {
+  control = "!";
+}
 
-      console.log("Server received data:", data);
-      const responseFrame = MeComFrame.parse(data);
-      console.log("Foudn frame with payload:", responseFrame.payload);
+export class MeComDevice {
+  private serialPort!: SerialPort;
+  private RESPONSE_TIMEOUT = 1000;
 
-      port.off("data", dataHandler);
-      resolve(responseFrame);
-    };
+  /** @param path Path to serial port */
+  constructor(public path: string) {
+    this.serialPort = new SerialPort({ path: path, baudRate: 9600 });
+  }
 
-    port.on("data", dataHandler);
+  public sendFrame = (frame: MeComFrame): Promise<MeComResponse> => {
+    return new Promise((resolve, reject) => {
+      const dataHandler = (buffer: Buffer) => {
+        const data = buffer.toString();
+        const responseFrame = MeComResponse.parse(data);
+        this.serialPort.off("data", dataHandler);
 
-    console.log("Sending frame:", frame.build());
-    port.write(frame.build());
-  });
-};
+        resolve(responseFrame);
+      };
+
+      // TODO: not sure if it's better to have just one dataHandler for all frames
+      this.serialPort.on("data", dataHandler);
+      this.serialPort.write(frame.build());
+
+      setTimeout(() => reject(new Error("Timeout")), this.RESPONSE_TIMEOUT);
+    });
+  };
+}

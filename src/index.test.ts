@@ -1,4 +1,6 @@
-import { MeComFrame } from ".";
+import { MeComDevice, MeComFrame } from ".";
+import { mockFrames } from "./mockFrames";
+import { mockTECServer, spawnSocatDevices } from "./mockTEC";
 
 describe("MeComFrame", () => {
   it("should be able to build frame with correct CRC", () => {
@@ -29,5 +31,41 @@ describe("MeComFrame", () => {
     // #0015AC?VR04D2017BFE
     const frame7 = new MeComFrame("#", 0, 0x15ac, "?VR04D201");
     expect(frame7.build()).toEqual("#0015AC?VR04D2017BFE\r");
+  });
+
+  it("should be able to parse frame", () => {
+    const frame = MeComFrame.parse("#0015AB?VR0064018000\r");
+    expect(frame.control).toEqual("#");
+    expect(frame.address).toEqual(0);
+    expect(frame.sequence).toEqual(0x15ab);
+    expect(frame.payload).toEqual("?VR006401");
+    expect(frame.crc).toEqual(0x8000);
+
+    expect(frame.build()).toEqual("#0015AB?VR0064018000\r");
+
+    expect(() => {
+      for (const mockFrame of mockFrames) {
+        MeComFrame.parse(mockFrame.IN + "\r");
+        MeComFrame.parse(mockFrame.OUT + "\r");
+      }
+    }).not.toThrow();
+  });
+});
+
+describe("sendFrame", () => {
+  it("should be able to send frame to device", async () => {
+    const { port1, port2 } = await spawnSocatDevices();
+
+    mockTECServer(port1);
+
+    const tec = new MeComDevice(port2);
+
+    const frame = new MeComFrame("#", 1, 0x15ab, "?VR006401");
+    const response = await tec.sendFrame(frame);
+
+    expect(response.control).toEqual("!");
+    expect(response.address).toEqual(1);
+    expect(response.sequence).toEqual(0x15ab);
+    expect(response.payload).toEqual("00000462");
   });
 });

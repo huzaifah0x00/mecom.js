@@ -1,29 +1,35 @@
 import { spawn } from "child_process";
 import { SerialPort } from "serialport";
-import { MeComFrame } from ".";
+import { mockFrames } from "./mockFrames";
 
-const mockTECDevice = async () => {
-  console.log("Server is listening on pty2");
-  const { server, client } = await spawnSocatDevices();
+/** Emulates a TEC device on a serial port.
+ * @param path Path to serial port
+ * @returns SerialPort instance
+ */
+export const mockTECServer = async (path: string) => {
+  const server = new SerialPort({ path: path, baudRate: 9600 });
 
   server.on("data", (buffer: Buffer) => {
-    const data = buffer.toString();
+    const data = buffer.toString().replace(/\r/, "");
+    const responseFrame = mockFrames.find((frame) => frame.OUT === data);
 
-    console.log("Server received data:", data);
-    const requestFrame = MeComFrame.parse(data);
-    console.log("Foudn frame with payload:", requestFrame.payload);
+    if (!responseFrame) {
+      console.log(`No response for ${data}`);
+      return;
+    }
 
-    const response = new MeComFrame("!", requestFrame.address, requestFrame.sequence, "");
-    console.log("Sending response:", response.build());
-
-    server.write(response.build());
+    server.write(responseFrame.IN + "\r");
   });
 
-  return client;
+  return server;
 };
 
-const spawnSocatDevices = () => {
-  return new Promise<{ server: SerialPort; client: SerialPort }>((resolve, reject) => {
+/**
+ * Spawns two socat processes and returns the paths to the PTYs.
+ * the ptys are setup such that they can talk to each other.
+ */
+export const spawnSocatDevices = () => {
+  return new Promise<{ port1: string; port2: string }>((resolve, reject) => {
     const socat = spawn("socat", ["-d", "-d", "pty,raw,echo=0", "pty,raw,echo=0"]);
     socat.stderr.on("data", (output: Buffer) => {
       const data = output.toString();
@@ -33,22 +39,9 @@ const spawnSocatDevices = () => {
       const match = data.matchAll(regex);
 
       const [match1, match2] = match;
-      const [pty1, pty2] = [match1[1], match2[1]];
+      const [port1, port2] = [match1[1], match2[1]];
 
-      console.log(`got ports:\n  ${pty1}\n  ${pty2}\n`);
-      console.log(`Using ${pty2} as server on device, you can use ${pty1} as client`);
-
-      const server = new SerialPort({
-        path: pty2,
-        baudRate: 9600,
-      });
-
-      const client = new SerialPort({
-        path: pty1,
-        baudRate: 9600,
-      });
-
-      resolve({ server, client });
+      resolve({ port1, port2 });
     });
   });
 };
