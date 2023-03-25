@@ -1,6 +1,7 @@
 import { MeComDevice, MeComFrame } from ".";
 import { mockFrames } from "./mockFrames";
-import { mockTECServer, spawnSocatDevices } from "./mockTEC";
+import { mockTECServer } from "./mockTEC";
+import { spawnSocatDevices } from "./utils";
 
 describe("MeComFrame", () => {
   it("should be able to build frame with correct CRC", () => {
@@ -54,12 +55,10 @@ describe("MeComFrame", () => {
 
 describe("sendFrame", () => {
   it("should be able to send frame to device", async () => {
-    const { port1, port2 } = await spawnSocatDevices();
+    const { port1, port2, close } = await spawnSocatDevices();
+    await mockTECServer(port1);
 
-    mockTECServer(port1);
-
-    const tec = new MeComDevice(port2);
-
+    const tec = await MeComDevice.open(port2);
     const frame = new MeComFrame("#", 1, 0x15ab, "?VR006401");
     const response = await tec.sendFrame(frame);
 
@@ -67,5 +66,7 @@ describe("sendFrame", () => {
     expect(response.address).toEqual(1);
     expect(response.sequence).toEqual(0x15ab);
     expect(response.payload).toEqual("00000462");
+
+    close();
   });
 });
