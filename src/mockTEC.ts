@@ -60,6 +60,7 @@ export const mockTECServer = async (path: string) => {
     server.write(responseFrame);
   });
 
+  console.log(`Started mock TEC server on ${path}`);
   return server;
 };
 

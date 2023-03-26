@@ -82,6 +82,7 @@ export class MeComResponse extends MeComFrame {
 export class MeComDevice {
   public readonly serialPort!: SerialPort;
   private RESPONSE_TIMEOUT = 200;
+  private sequenceCounter = 1;
 
   private constructor(port: SerialPort) {
     this.serialPort = port;
@@ -114,8 +115,9 @@ export class MeComDevice {
     const parameterHex = parameter.toString(16).padStart(4, "0");
     const parameterInstanceHex = parameterInstance.toString(16).padStart(2, "0");
 
-    const query = new MeComFrame("#", 0, 0, `?VR${parameterHex}${parameterInstanceHex}`);
+    const query = new MeComFrame("#", 0, this.sequenceCounter, `?VR${parameterHex}${parameterInstanceHex}`);
     const response = await this.sendFrame(query);
+    this.incrementSequenceCounter();
 
     return response.payload;
   }
@@ -124,18 +126,33 @@ export class MeComDevice {
     const parameterHex = parameter.toString(16).padStart(4, "0");
     const parameterInstanceHex = parameterInstance.toString(16).padStart(2, "0");
 
-    const query = new MeComFrame("#", 0, 0, `?VS${parameterHex}${parameterInstanceHex}${value}`);
+    const query = new MeComFrame("#", 0, this.sequenceCounter, `?VS${parameterHex}${parameterInstanceHex}${value}`);
     const response = await this.sendFrame(query);
+    this.incrementSequenceCounter();
 
     return response.payload;
   }
 
+  public async reset() {
+    const query = new MeComFrame("#", 0, this.sequenceCounter, "RS");
+    const response = await this.sendFrame(query);
+
+    this.incrementSequenceCounter();
+  }
+
+  private incrementSequenceCounter = () => (this.sequenceCounter += 1);
+
   public sendFrame(frame: MeComFrame): Promise<MeComResponse> {
     return new Promise((resolve, reject) => {
       const dataHandler = (buffer: Buffer) => {
+        this.serialPort.off("data", dataHandler);
+
         const data = buffer.toString();
         const responseFrame = MeComResponse.parse(data);
-        this.serialPort.off("data", dataHandler);
+
+        if (responseFrame.sequence != this.sequenceCounter) {
+          throw new Error("Invalid sequence in response");
+        }
 
         resolve(responseFrame);
       };
