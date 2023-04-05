@@ -3,10 +3,11 @@ export declare class MeComFrame {
     control: string;
     address: number;
     sequence: number;
-    payload: string;
+    payload: (string | number)[];
     private EOF;
-    constructor(control: string, address: number, sequence: number, payload: string);
+    constructor(control: string, address: number, sequence: number, payload: (string | number)[]);
     get crc(): number;
+    private buildPayloadString;
     /** get Frame without CRC and EOF */
     private get partialFrame();
     build(): string;
@@ -30,8 +31,8 @@ export declare class MeComDevice {
     static open(path: string): Promise<MeComDevice>;
     getDeviceAddress(): Promise<number>;
     getDeviceStatus(): Promise<number>;
-    getParameter(parameter: number, parameterInstance?: number): Promise<string>;
-    setParameter(parameter: number, value: string, parameterInstance?: number): Promise<string>;
+    getParameter(parameter: number, parameterInstance?: number, responseType?: "float32" | "int32"): Promise<number>;
+    setParameter(parameter: number, value: string | number, parameterInstance?: number): Promise<string | number>;
     reset(): Promise<void>;
     private incrementSequenceCounter;
     sendFrame(frame: MeComFrame): Promise<MeComResponse>;

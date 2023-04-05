@@ -1,5 +1,6 @@
 import crc16ccitt from "crc/crc16xmodem";
 import { SerialPort } from "serialport";
+import { convertNumberToHex } from "./utils";
 
 export class MeComFrame {
   // Frame structure:
@@ -12,10 +13,22 @@ export class MeComFrame {
 
   private EOF = "\r";
 
-  constructor(public control = "#", public address: number = 0, public sequence: number = 0, public payload: string) {}
+  constructor(public control = "#", public address: number = 0, public sequence: number = 0, public payload: (string | number)[]) {}
 
   public get crc(): number {
     return crc16ccitt(Buffer.from(this.partialFrame));
+  }
+
+  private buildPayloadString(): string {
+    let payload = "";
+
+    for (const part of this.payload) {
+      if (typeof part == "string") payload += part;
+      else if (typeof part == "number") payload += convertNumberToHex(part);
+      else throw new Error(`Unknown payload type: ${typeof part}`);
+    }
+
+    return payload;
   }
 
   /** get Frame without CRC and EOF */
@@ -28,7 +41,7 @@ export class MeComFrame {
     frame += this.control;
     frame += address;
     frame += sequence;
-    frame += this.payload;
+    frame += this.buildPayloadString();
 
     return frame.toUpperCase();
   }
@@ -43,7 +56,7 @@ export class MeComFrame {
     frame += this.control;
     frame += address;
     frame += sequence;
-    frame += this.payload;
+    frame += this.buildPayloadString();
     frame += crc;
     frame += this.EOF;
 
@@ -59,7 +72,7 @@ export class MeComFrame {
     const payload = frame.slice(7, -5);
     const crc = parseInt(frame.slice(-5, -1), 16);
 
-    const parsedFrame = new MeComFrame(control, address, sequence, payload);
+    const parsedFrame = new MeComFrame(control, address, sequence, [payload]);
 
     if (parsedFrame.crc !== crc) {
       throw new Error(`CRC mismatch: ${parsedFrame.crc} !== ${crc}`);
@@ -102,39 +115,46 @@ export class MeComDevice {
   }
 
   public async getDeviceAddress(): Promise<number> {
-    const response = await this.getParameter(2051);
-    return parseInt(response);
+    return await this.getParameter(2051, undefined, "int32");
   }
 
   public async getDeviceStatus(): Promise<number> {
-    const response = await this.getParameter(104);
-    return parseInt(response);
+    return await this.getParameter(104, undefined, "int32");
   }
 
-  public async getParameter(parameter: number, parameterInstance = 1): Promise<string> {
+  public async getParameter(parameter: number, parameterInstance = 1, responseType: "float32" | "int32" = "float32"): Promise<number> {
     const parameterHex = parameter.toString(16).padStart(4, "0");
     const parameterInstanceHex = parameterInstance.toString(16).padStart(2, "0");
 
-    const query = new MeComFrame("#", 0, this.sequenceCounter, `?VR${parameterHex}${parameterInstanceHex}`);
+    const payloadParts = ["?VR", parameterHex, parameterInstanceHex];
+
+    const query = new MeComFrame("#", 0, this.sequenceCounter, payloadParts);
     const response = await this.sendFrame(query);
     this.incrementSequenceCounter();
 
-    return response.payload;
+    if (responseType == "float32") {
+      console.log(`converting this to float32: ${response.payload[0]}`);
+      return new Float32Array(new Uint32Array([parseInt(response.payload[0] as string, 16)]).buffer)[0];
+    } else {
+      return parseInt(response.payload[0] as string, 16);
+    }
   }
 
-  public async setParameter(parameter: number, value: string, parameterInstance = 1): Promise<string> {
+  public async setParameter(parameter: number, value: string | number, parameterInstance = 1): Promise<string | number> {
     const parameterHex = parameter.toString(16).padStart(4, "0");
     const parameterInstanceHex = parameterInstance.toString(16).padStart(2, "0");
 
-    const query = new MeComFrame("#", 0, this.sequenceCounter, `?VS${parameterHex}${parameterInstanceHex}${value}`);
+    const payload = ["VS", parameterHex, parameterInstanceHex, value];
+
+    const query = new MeComFrame("#", 0, this.sequenceCounter, payload);
     const response = await this.sendFrame(query);
     this.incrementSequenceCounter();
 
-    return response.payload;
+    return response.payload[0];
   }
 
   public async reset() {
-    const query = new MeComFrame("#", 0, this.sequenceCounter, "RS");
+    const query = new MeComFrame("#", 0, this.sequenceCounter, ["RS"]);
     const response = await this.sendFrame(query);
 
     this.incrementSequenceCounter();
@@ -144,14 +164,14 @@ export class MeComDevice {
 
   public sendFrame(frame: MeComFrame): Promise<MeComResponse> {
     return new Promise((resolve, reject) => {
-      const dataHandler = (buffer: Buffer) => {
-        this.serialPort.off("data", dataHandler);
+      const responseHandler = (buffer: Buffer) => {
+        this.serialPort.off("data", responseHandler);
 
-        const data = buffer.toString();
-        const responseFrame = MeComResponse.parse(data);
+        const resposne = buffer.toString();
+        const responseFrame = MeComResponse.parse(resposne);
 
-        if (responseFrame.sequence != this.sequenceCounter) {
-          throw new Error("Invalid sequence in response");
+        if (responseFrame.sequence != frame.sequence) {
+          throw new Error(`Invalid sequence in response, expected sequence: ${this.sequenceCounter}, got: ${responseFrame.sequence}`);
         }
 
         resolve(responseFrame);
@@ -159,7 +179,7 @@ export class MeComDevice {
 
       // TODO: not sure if it's better to have just one dataHandler listening always for all frames
       // or this is fine, where we start listening for the response only when sending a frame
-      this.serialPort.on("data", dataHandler);
+      this.serialPort.on("data", responseHandler);
       this.serialPort.write(frame.build());
 
       setTimeout(() => reject(new Error("Timeout")), this.RESPONSE_TIMEOUT);

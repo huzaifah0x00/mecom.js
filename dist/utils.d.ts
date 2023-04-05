@@ -8,3 +8,4 @@ export declare const spawnSocatDevices: () => Promise<{
     port2: string;
     close: () => void;
 }>;
+export declare function convertNumberToHex(number: number): string;
