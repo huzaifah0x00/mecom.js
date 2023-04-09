@@ -1,11 +1,11 @@
-# This workflow will run tests using node and then publish a package to npmjs when a version tag is pushed.
+# This workflow will run tests using node when code is pushed to main.
 
-name: Publish to npm
+name: Build and test
 
 on:
   push:
-    tags:
-      - "v*"
+    branches:
+      - main
 
 jobs:
   build:
@@ -21,6 +21,3 @@ jobs:
 
       - run: npm ci
       - run: npm test
-      - run: npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
