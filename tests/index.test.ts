@@ -67,6 +67,7 @@ describe("sendFrame", () => {
     expect(response.sequence).toEqual(0x15ab);
     expect(response.payload).toEqual(["00000462"]);
 
+    tec.serialPort.close();
     close();
   });
 });
