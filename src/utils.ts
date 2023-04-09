@@ -19,6 +19,7 @@ export async function detectMeComPort(): Promise<string | undefined> {
 /**
  * Spawns two socat processes and returns the paths to the PTYs.
  * the ptys are setup such that they can talk to each other.
+ * this only works on linux
  */
 export const spawnSocatDevices = () => {
   return new Promise<{ port1: string; port2: string; close: () => void }>((resolve, reject) => {

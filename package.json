@@ -1,23 +1,27 @@
 {
   "name": "mecom",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "MeCom API for node.js",
   "main": "dist/index.js",
   "types": "./dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
   "scripts": {
-    "build": "tsc",
+    "prepack": "npm run build",
+    "build": "tsc --build --verbose tsconfig.prod.json",
     "test": "jest"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cyto-service/mecom.js.git"
+    "url": "git+https://github.com/huzaifah0x00/mecom.js.git"
   },
   "author": "huzaifah0x00",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/cyto-service/mecom.js/issues"
+    "url": "https://github.com/huzaifah0x00/mecom.js/issues"
   },
-  "homepage": "https://github.com/cyto-service/mecom.js#readme",
+  "homepage": "https://github.com/huzaifah0x00/mecom.js#readme",
   "devDependencies": {
     "@tsconfig/recommended": "^1.0.2",
     "@types/jest": "^29.4.1",

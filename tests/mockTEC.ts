@@ -1,7 +1,8 @@
 import { SerialPort } from "serialport";
+import { MeComFrame } from "../src/mecom";
 import { mockFrames } from "./mockFrames";
+
 import path from "path";
-import { MeComFrame } from "./mecom";
 
 /** Emulates a TEC device on a serial port.
  * @param path Path to serial port

@@ -1,7 +1,7 @@
-import { MeComDevice, MeComFrame } from ".";
+import { MeComDevice, MeComFrame } from "../src/mecom";
+import { spawnSocatDevices } from "../src/utils";
 import { mockFrames } from "./mockFrames";
 import { mockTECServer } from "./mockTEC";
-import { spawnSocatDevices } from "./utils";
 
 describe("MeComFrame", () => {
   it("should be able to build frame with correct CRC", () => {
