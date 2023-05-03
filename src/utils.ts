@@ -2,14 +2,19 @@ import { spawn } from "child_process";
 import { SerialPort } from "serialport";
 import { MeComDevice } from ".";
 
-export async function detectMeComPort(): Promise<string | undefined> {
+export async function getSerialPorts(): Promise<string[]> {
   const ports = await SerialPort.list();
+  return ports.map((port) => port.path);
+}
+
+export async function detectMeComPort(): Promise<string | undefined> {
+  const ports = await getSerialPorts();
 
   for (const port of ports) {
     try {
-      const mecom = await MeComDevice.open(port.path);
+      const mecom = await MeComDevice.open(port);
       await mecom.getDeviceStatus();
-      return port.path;
+      return port;
     } catch (e) {
       continue;
     }
