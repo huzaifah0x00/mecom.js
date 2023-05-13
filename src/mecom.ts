@@ -1,6 +1,9 @@
 import crc16ccitt from "crc/crc16xmodem";
-import { SerialPort } from "serialport";
+import { ReadlineParser, SerialPort } from "serialport";
 import { convertNumberToHex } from "./utils";
+import debug from "debug";
+
+const log = debug("mecom");
 
 export class MeComFrame {
   // Frame structure:
@@ -94,7 +97,7 @@ export class MeComResponse extends MeComFrame {
  */
 export class MeComDevice {
   public readonly serialPort!: SerialPort;
-  private RESPONSE_TIMEOUT = 200;
+  private RESPONSE_TIMEOUT = 2000;
   private sequenceCounter = 1;
 
   private constructor(port: SerialPort) {
@@ -103,11 +106,15 @@ export class MeComDevice {
 
   /** @param path Path to serial port */
   public static async open(path: string): Promise<MeComDevice> {
+    log(`Opening serial port ${path}`);
     const serialPort = await new Promise<SerialPort>((resolve, reject) => {
       const port = new SerialPort({ path, baudRate: 9600 }, (err) => {
         if (err) reject(err);
         else resolve(port);
       });
+
+      log(`Serial port ${path} opened`);
+      port.pipe(new ReadlineParser());
     });
 
     const mecom = new MeComDevice(serialPort);
@@ -133,7 +140,6 @@ export class MeComDevice {
     this.incrementSequenceCounter();
 
     if (responseType == "float32") {
-      console.log(`converting this to float32: ${response.payload[0]}`);
       return new Float32Array(new Uint32Array([parseInt(response.payload[0] as string, 16)]).buffer)[0];
     } else {
       return parseInt(response.payload[0] as string, 16);
@@ -163,11 +169,13 @@ export class MeComDevice {
   private incrementSequenceCounter = () => (this.sequenceCounter += 1);
 
   public sendFrame(frame: MeComFrame): Promise<MeComResponse> {
+    log(`Sending frame: ${frame.build()}`);
     return new Promise((resolve, reject) => {
       const responseHandler = (buffer: Buffer) => {
         this.serialPort.off("data", responseHandler);
 
         const resposne = buffer.toString();
+        log(`Received response: ${resposne}`);
         const responseFrame = MeComResponse.parse(resposne);
 
         if (responseFrame.sequence != frame.sequence) {
@@ -176,6 +184,8 @@ export class MeComDevice {
 
         resolve(responseFrame);
       };
+
+      this.serialPort.flush();
 
       // TODO: not sure if it's better to have just one dataHandler listening always for all frames
       // or this is fine, where we start listening for the response only when sending a frame
