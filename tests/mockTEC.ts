@@ -9,7 +9,7 @@ import path from "path";
  * @returns SerialPort instance
  */
 export const mockTECServer = async (path: string) => {
-  const server = new SerialPort({ path: path, baudRate: 9600 });
+  const server = new SerialPort({ path: path, baudRate: 57600 });
 
   server.on("data", (buffer: Buffer) => {
     const data = buffer.toString().replace(/\r/, "");

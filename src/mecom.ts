@@ -108,7 +108,7 @@ export class MeComDevice {
   public static async open(path: string): Promise<MeComDevice> {
     log(`Opening serial port ${path}`);
     const serialPort = await new Promise<SerialPort>((resolve, reject) => {
-      const port = new SerialPort({ path, baudRate: 9600 }, (err) => {
+      const port = new SerialPort({ path, baudRate: 57600 }, (err) => {
         if (err) reject(err);
         else resolve(port);
       });
