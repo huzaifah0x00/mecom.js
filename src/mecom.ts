@@ -93,7 +93,7 @@ export class MeComDevice {
     this.serialPort.write(frame.build());
 
     const response = await this.waitForResponse(frame);
-    log(`got response for ${frame.build}: ${JSON.stringify(response)}`);
+    log(`got response for ${frame.build()}: ${JSON.stringify(response)}`);
 
     return response;
   }

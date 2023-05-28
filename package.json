@@ -1,6 +1,6 @@
 {
   "name": "mecom",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "MeCom API for node.js",
   "main": "dist/index.js",
   "types": "./dist/index.d.ts",
