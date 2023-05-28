@@ -1,5 +1,6 @@
-import { MeComDevice, MeComFrame } from "../src/mecom";
-import { spawnSocatDevices } from "../src/utils";
+import { MeComDevice } from "../src/mecom";
+import { MeComFrame } from "../src/MeComFrame";
+import { spawnSocatDevices } from "../src/utils/serial";
 import { mockFrames } from "./mockFrames";
 import { mockTECServer } from "./mockTEC";
 

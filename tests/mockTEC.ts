@@ -1,5 +1,5 @@
 import { SerialPort } from "serialport";
-import { MeComFrame } from "../src/mecom";
+import { MeComFrame } from "../src/MeComFrame";
 import { mockFrames } from "./mockFrames";
 
 import path from "path";

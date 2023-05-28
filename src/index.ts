@@ -1,2 +1,3 @@
-export { MeComDevice, MeComFrame, MeComResponse } from "./mecom";
-export { detectMeComPort, getSerialPorts } from "./utils";
+export { MeComDevice } from "./mecom";
+export { MeComFrame, MeComResponse } from "./MeComFrame";
+export { detectMeComPort, getSerialPorts } from "./utils/serial";

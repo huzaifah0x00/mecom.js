@@ -1,93 +1,9 @@
-import crc16ccitt from "crc/crc16xmodem";
-import { ReadlineParser, SerialPort } from "serialport";
-import { convertNumberToHex } from "./utils";
 import debug from "debug";
+import { ReadlineParser, SerialPort } from "serialport";
+import CallbackStore from "./utils/CallbackStore";
+import { MeComFrame, MeComResponse } from "./MeComFrame";
 
 const log = debug("mecom");
-
-export class MeComFrame {
-  // Frame structure:
-  // 1 Control  |  ASCII char | 8 Bits
-  // 2 Address  |  UINT8      | 16 Bits
-  // 3 Sequence |  Nr. UINT16 | 32 Bits
-  // 4 Payload  |  N * 8 Bits | N * 8 Bits
-  // 5 Frame    |  CRC UINT16 | 32 Bits
-  // 6 EOF      |  ASCII char | 8 Bits
-
-  private EOF = "\r";
-
-  constructor(public control = "#", public address: number = 0, public sequence: number = 0, public payload: (string | number)[]) {}
-
-  public get crc(): number {
-    return crc16ccitt(Buffer.from(this.partialFrame));
-  }
-
-  private buildPayloadString(): string {
-    let payload = "";
-
-    for (const part of this.payload) {
-      if (typeof part == "string") payload += part;
-      else if (typeof part == "number") payload += convertNumberToHex(part);
-      else throw new Error(`Unknown payload type: ${typeof part}`);
-    }
-
-    return payload;
-  }
-
-  /** get Frame without CRC and EOF */
-  private get partialFrame(): string {
-    const address = this.address.toString(16).padStart(2, "0");
-    const sequence = this.sequence.toString(16).padStart(4, "0");
-
-    let frame = "";
-
-    frame += this.control;
-    frame += address;
-    frame += sequence;
-    frame += this.buildPayloadString();
-
-    return frame.toUpperCase();
-  }
-
-  public build(): string {
-    const address = this.address.toString(16).padStart(2, "0");
-    const sequence = this.sequence.toString(16).padStart(4, "0");
-    const crc = this.crc.toString(16).padStart(4, "0");
-
-    let frame = "";
-
-    frame += this.control;
-    frame += address;
-    frame += sequence;
-    frame += this.buildPayloadString();
-    frame += crc;
-    frame += this.EOF;
-
-    return frame.toUpperCase();
-  }
-
-  public static parse(frame: string): MeComFrame {
-    // Step 1: Separate the fields
-
-    const control = frame[0];
-    const address = parseInt(frame.slice(1, 3), 16);
-    const sequence = parseInt(frame.slice(3, 7), 16);
-    const payload = frame.slice(7, -5);
-    const crc = parseInt(frame.slice(-5, -1), 16);
-
-    const parsedFrame = new MeComFrame(control, address, sequence, [payload]);
-
-    if (parsedFrame.crc !== crc) {
-      throw new Error(`CRC mismatch: ${parsedFrame.crc} !== ${crc}`);
-    }
-
-    return parsedFrame;
-  }
-}
-
-export class MeComResponse extends MeComFrame {
-  control = "!";
-}
 
 /**
  * use MeComDevice.open() to create a new instance
@@ -100,8 +16,11 @@ export class MeComDevice {
   private RESPONSE_TIMEOUT = 2000;
   private sequenceCounter = 1;
 
+  private cbStore = new CallbackStore();
+
   private constructor(port: SerialPort) {
     this.serialPort = port;
+    this.registerListener();
   }
 
   /** @param path Path to serial port */
@@ -114,7 +33,7 @@ export class MeComDevice {
       });
 
       log(`Serial port ${path} opened`);
-      port.pipe(new ReadlineParser());
+      port.pipe(new ReadlineParser({ delimiter: "\r" }));
     });
 
     const mecom = new MeComDevice(serialPort);
@@ -168,31 +87,58 @@ export class MeComDevice {
 
   private incrementSequenceCounter = () => (this.sequenceCounter += 1);
 
-  public sendFrame(frame: MeComFrame): Promise<MeComResponse> {
+  public async sendFrame(frame: MeComFrame): Promise<MeComResponse> {
     log(`Sending frame: ${frame.build()}`);
+
+    this.serialPort.flush();
+    this.serialPort.write(frame.build());
+
+    log(`Waiting for response`);
+    const response = await this.waitForResponse(frame);
+    log(`Done waiting for response: ${response}`);
+
+    return response;
+  }
+
+  /**
+   * Waits for a response with the same sequence number as the given frame
+   * this registers a callback for the sequence which is called once the response is received ( in registerListener )
+   */
+  async waitForResponse(frame: MeComFrame): Promise<MeComResponse> {
     return new Promise((resolve, reject) => {
-      const responseHandler = (buffer: Buffer) => {
-        this.serialPort.off("data", responseHandler);
+      const timeout = setTimeout(() => reject(new Error("Timeout")), this.RESPONSE_TIMEOUT);
 
-        const resposne = buffer.toString();
-        log(`Received response: ${resposne}`);
-        const responseFrame = MeComResponse.parse(resposne);
-
-        if (responseFrame.sequence != frame.sequence) {
-          throw new Error(`Invalid sequence in response, expected sequence: ${this.sequenceCounter}, got: ${responseFrame.sequence}`);
-        }
-
-        resolve(responseFrame);
+      const callback = (response: MeComResponse) => {
+        clearTimeout(timeout);
+        resolve(response);
+        this.cbStore.delete(frame.sequence);
       };
 
-      this.serialPort.flush();
-
-      // TODO: not sure if it's better to have just one dataHandler listening always for all frames
-      // or this is fine, where we start listening for the response only when sending a frame
-      this.serialPort.on("data", responseHandler);
-      this.serialPort.write(frame.build());
-
-      setTimeout(() => reject(new Error("Timeout")), this.RESPONSE_TIMEOUT);
+      this.cbStore.register(frame.sequence, callback);
     });
+  }
+
+  /**
+   * Registers a listener for incoming data
+   * Once data is received, it is parsed as a frame and the callback for the sequence is called
+   */
+  private registerListener() {
+    const onData = (buffer: Buffer) => {
+      const response = buffer.toString();
+      log(`(onData): Received data: ${response}`);
+
+      let responseFrame: MeComResponse;
+      try {
+        responseFrame = MeComResponse.parse(response);
+      } catch (e) {
+        log(`Error parsing data as a frame, ignoring data... error: ${e}`);
+        return;
+      }
+
+      const callback = this.cbStore.get(responseFrame.sequence);
+      callback?.(responseFrame);
+    };
+
+    this.serialPort.on("data", onData);
   }
 }

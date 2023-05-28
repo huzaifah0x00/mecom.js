@@ -1,6 +1,6 @@
 import { spawn } from "child_process";
 import { SerialPort } from "serialport";
-import { MeComDevice } from ".";
+import { MeComDevice } from "..";
 
 export async function getSerialPorts(): Promise<string[]> {
   const ports = await SerialPort.list();
@@ -27,6 +27,10 @@ export async function detectMeComPort(): Promise<string | undefined> {
  * this only works on linux
  */
 export const spawnSocatDevices = () => {
+  if (process.platform == "win32") {
+    return { port1: "COM1", port2: "COM2", close: () => null };
+  }
+
   return new Promise<{ port1: string; port2: string; close: () => void }>((resolve, reject) => {
     const socat = spawn("socat", ["-d", "-d", "pty,raw,echo=0", "pty,raw,echo=0"]);
     socat.stderr.once("data", (output: Buffer) => {
@@ -43,22 +47,3 @@ export const spawnSocatDevices = () => {
     });
   });
 };
-
-export function convertNumberToHex(number: number) {
-  if (Number.isInteger(number)) {
-    return number.toString(16).padStart(8, "0");
-  } else {
-    return convertToFloat32Hex(number);
-  }
-}
-
-function convertToFloat32Hex(part: number) {
-  let buffer = new ArrayBuffer(4);
-  let view = new DataView(buffer);
-  view.setFloat32(0, part, false);
-  const hex = Array.from(new Uint8Array(buffer))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-
-  return hex;
-}
