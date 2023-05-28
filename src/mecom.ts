@@ -54,9 +54,9 @@ export class MeComDevice {
 
     const payloadParts = ["?VR", parameterHex, parameterInstanceHex];
 
+    this.incrementSequenceCounter();
     const query = new MeComFrame("#", 0, this.sequenceCounter, payloadParts);
     const response = await this.sendFrame(query);
-    this.incrementSequenceCounter();
 
     if (responseType == "float32") {
       return new Float32Array(new Uint32Array([parseInt(response.payload[0] as string, 16)]).buffer)[0];
@@ -71,18 +71,17 @@ export class MeComDevice {
 
     const payload = ["VS", parameterHex, parameterInstanceHex, value];
 
+    this.incrementSequenceCounter();
     const query = new MeComFrame("#", 0, this.sequenceCounter, payload);
     const response = await this.sendFrame(query);
-    this.incrementSequenceCounter();
 
     return response.payload[0];
   }
 
   public async reset() {
+    this.incrementSequenceCounter();
     const query = new MeComFrame("#", 0, this.sequenceCounter, ["RS"]);
     const response = await this.sendFrame(query);
-
-    this.incrementSequenceCounter();
   }
 
   private incrementSequenceCounter = () => (this.sequenceCounter += 1);
@@ -93,9 +92,8 @@ export class MeComDevice {
     this.serialPort.flush();
     this.serialPort.write(frame.build());
 
-    log(`Waiting for response`);
     const response = await this.waitForResponse(frame);
-    log(`Done waiting for response: ${response}`);
+    log(`got response for ${frame.build}: ${JSON.stringify(response)}`);
 
     return response;
   }
@@ -106,7 +104,10 @@ export class MeComDevice {
    */
   async waitForResponse(frame: MeComFrame): Promise<MeComResponse> {
     return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error("Timeout")), this.RESPONSE_TIMEOUT);
+      const timeout = setTimeout(() => {
+        log(`Timed out while waiting response for frame: ${frame.build()}`);
+        return reject(new Error("Timeout"));
+      }, this.RESPONSE_TIMEOUT);
 
       const callback = (response: MeComResponse) => {
         clearTimeout(timeout);

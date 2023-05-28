@@ -68,6 +68,8 @@ export class MeComFrame {
     const payload = frame.slice(7, -5);
     const crc = parseInt(frame.slice(-5, -1), 16);
 
+    // TODO: handle error frames starting with +
+
     if (frame.length === 12 && !payload[0] && control === "!") {
       return new ACKFrame("!", address, sequence, []);
     }
