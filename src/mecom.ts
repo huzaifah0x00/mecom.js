@@ -1,7 +1,7 @@
 import debug from "debug";
 import { ReadlineParser, SerialPort } from "serialport";
-import CallbackStore from "./utils/CallbackStore";
 import { MeComFrame, MeComResponse } from "./MeComFrame";
+import CallbackStore from "./utils/CallbackStore";
 
 const log = debug("mecom");
 
@@ -139,6 +139,7 @@ export class MeComDevice {
       callback?.(responseFrame);
     };
 
-    this.serialPort.on("data", onData);
+    const parser = this.serialPort.pipe(new ReadlineParser({ delimiter: "\r", includeDelimiter: true }));
+    parser.on("data", onData);
   }
 }

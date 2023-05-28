@@ -1,7 +1,6 @@
 import crc16ccitt from "crc/crc16xmodem";
 import { convertNumberToHex } from "./utils/convert";
 
-
 export class MeComFrame {
   // Frame structure:
   // 1 Control  |  ASCII char | 8 Bits
@@ -12,7 +11,7 @@ export class MeComFrame {
   // 6 EOF      |  ASCII char | 8 Bits
   private EOF = "\r";
 
-  constructor(public control = "#", public address: number = 0, public sequence: number = 0, public payload: (string | number)[]) { }
+  constructor(public control = "#", public address: number = 0, public sequence: number = 0, public payload: (string | number)[]) {}
 
   public get crc(): number {
     return crc16ccitt(Buffer.from(this.partialFrame));
@@ -22,12 +21,9 @@ export class MeComFrame {
     let payload = "";
 
     for (const part of this.payload) {
-      if (typeof part == "string")
-        payload += part;
-      else if (typeof part == "number")
-        payload += convertNumberToHex(part);
-      else
-        throw new Error(`Unknown payload type: ${typeof part}`);
+      if (typeof part == "string") payload += part;
+      else if (typeof part == "number") payload += convertNumberToHex(part);
+      else throw new Error(`Unknown payload type: ${typeof part}`);
     }
 
     return payload;
@@ -66,12 +62,15 @@ export class MeComFrame {
   }
 
   public static parse(frame: string): MeComFrame {
-    // Step 1: Separate the fields
     const control = frame[0];
     const address = parseInt(frame.slice(1, 3), 16);
     const sequence = parseInt(frame.slice(3, 7), 16);
     const payload = frame.slice(7, -5);
     const crc = parseInt(frame.slice(-5, -1), 16);
+
+    if (frame.length === 12 && !payload[0] && control === "!") {
+      return new ACKFrame("!", address, sequence, []);
+    }
 
     const parsedFrame = new MeComFrame(control, address, sequence, [payload]);
 
@@ -83,6 +82,11 @@ export class MeComFrame {
   }
 }
 
+// TODO: make these subclasses more useful
 export class MeComResponse extends MeComFrame {
   control = "!";
+}
+
+export class ACKFrame extends MeComResponse {
+  payload = [""];
 }
