@@ -87,15 +87,17 @@ export class MeComDevice {
   private incrementSequenceCounter = () => (this.sequenceCounter += 1);
 
   public async sendFrame(frame: MeComFrame): Promise<MeComResponse> {
-    log(`Sending frame: ${frame.build()}`);
-
     this.serialPort.flush();
     this.serialPort.write(frame.build());
 
-    const response = await this.waitForResponse(frame);
-    log(`got response for ${frame.build()}: ${JSON.stringify(response)}`);
-
-    return response;
+    try {
+      const response = await this.waitForResponse(frame);
+      log(`Sequence ${frame.sequence}: ${frame.build()} => ${response.build()}`);
+      return response;
+    } catch (e) {
+      log(`Sequence ${frame.sequence}: ${frame.build()} => Error: ${e}`);
+      throw e;
+    }
   }
 
   /**
@@ -105,7 +107,6 @@ export class MeComDevice {
   async waitForResponse(frame: MeComFrame): Promise<MeComResponse> {
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
-        log(`Timed out while waiting response for frame: ${frame.build()}`);
         return reject(new Error("Timeout"));
       }, this.RESPONSE_TIMEOUT);
 
@@ -126,7 +127,6 @@ export class MeComDevice {
   private registerListener() {
     const onData = (buffer: Buffer) => {
       const response = buffer.toString();
-      log(`(onData): Received data: ${response}`);
 
       let responseFrame: MeComResponse;
       try {
