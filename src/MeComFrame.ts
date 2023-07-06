@@ -1,5 +1,6 @@
 import crc16ccitt from "crc/crc16xmodem";
 import { convertNumberToHex } from "./utils/convert";
+import { Float } from "./utils/float";
 
 export class MeComFrame {
   // Frame structure:
@@ -11,7 +12,7 @@ export class MeComFrame {
   // 6 EOF      |  ASCII char | 8 Bits
   private EOF = "\r";
 
-  constructor(public control = "#", public address: number = 0, public sequence: number = 0, public payload: (string | number)[]) {}
+  constructor(public control = "#", public address: number = 0, public sequence: number = 0, public payload: (string | number | Float)[]) {}
 
   public get crc(): number {
     return crc16ccitt(Buffer.from(this.partialFrame));
@@ -22,7 +23,7 @@ export class MeComFrame {
 
     for (const part of this.payload) {
       if (typeof part == "string") payload += part;
-      else if (typeof part == "number") payload += convertNumberToHex(part);
+      else if (typeof part == "number" || part instanceof Float) payload += convertNumberToHex(part);
       else throw new Error(`Unknown payload type: ${typeof part}`);
     }
 

@@ -2,6 +2,7 @@ import debug from "debug";
 import { ReadlineParser, SerialPort } from "serialport";
 import { MeComFrame, MeComResponse } from "./MeComFrame";
 import CallbackStore from "./utils/CallbackStore";
+import { Float } from "./utils/float";
 
 const log = debug("mecom");
 
@@ -18,13 +19,13 @@ export class MeComDevice {
 
   private cbStore = new CallbackStore();
 
-  private constructor(port: SerialPort) {
+  constructor(port: SerialPort) {
     this.serialPort = port;
     this.registerListener();
   }
 
   /** @param path Path to serial port */
-  public static async open(path: string): Promise<MeComDevice> {
+  public static async open(path: string) {
     log(`Opening serial port ${path}`);
     const serialPort = await new Promise<SerialPort>((resolve, reject) => {
       const port = new SerialPort({ path, baudRate: 57600 }, (err) => {
@@ -65,7 +66,7 @@ export class MeComDevice {
     }
   }
 
-  public async setParameter(parameter: number, value: string | number, parameterInstance = 1): Promise<string | number> {
+  public async setParameter(parameter: number, value: string | number | Float, parameterInstance = 1): Promise<string | number> {
     const parameterHex = parameter.toString(16).padStart(4, "0");
     const parameterInstanceHex = parameterInstance.toString(16).padStart(2, "0");
 
@@ -75,7 +76,16 @@ export class MeComDevice {
     const query = new MeComFrame("#", 0, this.sequenceCounter, payload);
     const response = await this.sendFrame(query);
 
-    return response.payload[0];
+    const responsePayload = response.payload[0];
+
+    if (responsePayload instanceof Float) {
+      // This will never happen, (the Float class is only used internally for indicating floats when building a frame)
+      // MecomFrame.parse ( which is used by sendFrame ) will always return a string or number
+      // But typescript doesn't know that, so we have to throw an error here for narrowing type
+      throw new Error("Unexpected error: Response payload is a float");
+    }
+
+    return responsePayload;
   }
 
   public async reset() {
@@ -142,5 +152,24 @@ export class MeComDevice {
 
     const parser = this.serialPort.pipe(new ReadlineParser({ delimiter: "\r", includeDelimiter: true }));
     parser.on("data", onData);
+  }
+}
+
+export class MeerstetterTEC extends MeComDevice {
+  public static async open(path: string) {
+    const mecom = await MeComDevice.open(path);
+    return new MeerstetterTEC(mecom.serialPort);
+  }
+
+  setTemperature(temperature: number) {
+    return this.setParameter(1000, new Float(temperature));
+  }
+
+  getTemperature() {
+    return this.getParameter(1000);
+  }
+
+  setOutputEnabled(enabled: boolean) {
+    return this.setParameter(2010, enabled ? 1 : 0);
   }
 }

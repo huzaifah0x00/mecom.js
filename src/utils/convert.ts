@@ -1,8 +1,10 @@
-export function convertNumberToHex(number: number) {
-  if (Number.isInteger(number)) {
-    return number.toString(16).padStart(8, "0");
+import { Float } from "./float";
+
+export function convertNumberToHex(number: number | Float) {
+  if (number instanceof Float) {
+    return convertToFloat32Hex(number.value);
   } else {
-    return convertToFloat32Hex(number);
+    return number.toString(16).padStart(8, "0");
   }
 }
 
