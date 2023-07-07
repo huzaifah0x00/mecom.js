@@ -166,7 +166,7 @@ export class MeerstetterTEC extends MeComDevice {
   }
 
   getTemperature() {
-    return this.getParameter(3000);
+    return this.getParameter(1000);
   }
 
   setOutputEnabled(enabled: boolean) {
